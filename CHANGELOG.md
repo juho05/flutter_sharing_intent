@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file.
 
 ## 2.1.0
+* Add support for the Android Gradle Plugin 9. The Android module no longer applies the
+  Kotlin Gradle Plugin on AGP 9, so it builds with AGP 9 built-in Kotlin and no longer
+  triggers the Flutter "plugins that apply KGP" warning. AGP 8 keeps working, KGP is
+  applied conditionally for it, so the minimum Flutter version stays at 3.38.
+* Migrated `kotlinOptions` to `kotlin { compilerOptions { ... } }` and the Android DSL to
+  property assignment syntax, which the AGP 9 DSL and Gradle 10 require.
+* Raised the Java and Kotlin target of the Android module from 1.8 to 17. Host apps now need
+  `sourceCompatibility`/`targetCompatibility` of 17 (the Flutter template default) in their
+  `android/app/build.gradle`.
+* Example app upgraded to AGP 9.1.0, Gradle 9.3.1, Kotlin 2.4.0 and built-in Kotlin. Its
+  previous AGP 8.6.0 was below the 8.11.1 minimum of current Flutter versions.
+* See README "Android Gradle Plugin 9 and built-in Kotlin" for the host app requirements.
 * Add UIScene lifecycle support (Flutter 3.38+). Plugin now registers as a
   `FlutterSceneLifeCycleDelegate` and mirrors the existing `UIApplicationDelegate`
   hooks on `scene(_:willConnectTo:options:)`, `scene(_:openURLContexts:)`, and

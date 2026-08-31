@@ -1,22 +1,26 @@
 plugins {
     id 'com.android.library'
-    id 'org.jetbrains.kotlin.android'
 }
 
-group 'com.techind.flutter_sharing_intent'
-version '1.0-SNAPSHOT'
+// AGP 9 compiles Kotlin itself (built-in Kotlin), and when built-in Kotlin is switched off the
+// Flutter Gradle plugin (3.44+) applies KGP for us. Only AGP 8 still needs it applied here.
+// pluginManager.apply() is used instead of "apply plugin:" so the Flutter tooling does not
+// flag this module as a plugin that applies KGP under AGP 9.
+def agpMajorVersion = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0] as int
+if (agpMajorVersion < 9) {
+    project.pluginManager.apply('kotlin-android')
+}
+
+group = 'com.techind.flutter_sharing_intent'
+version = '1.0-SNAPSHOT'
 
 android {
-    namespace 'com.techind.flutter_sharing_intent'
-    compileSdk 36
+    namespace = 'com.techind.flutter_sharing_intent'
+    compileSdk = 36
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-
-    kotlinOptions {
-        jvmTarget = '1.8'
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     sourceSets {
@@ -25,7 +29,13 @@ android {
     }
 
     defaultConfig {
-        minSdk 21
+        minSdk = 21
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 

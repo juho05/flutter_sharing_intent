@@ -137,6 +137,42 @@ Add the following intent filters to your [android/app/src/main/AndroidManifest.x
 > longer appear in the system share sheet for those types.  For example, to receive only images and
 > videos, keep only the `image/*` and `video/*` filters and remove the others.
 
+#### Android Gradle Plugin 9 and built-in Kotlin
+
+The plugin's Android module builds with both AGP 8 and AGP 9. It no longer applies the Kotlin
+Gradle Plugin (KGP) on AGP 9, so it is compatible with [built-in
+Kotlin](https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin) and does not
+trigger the "plugins that apply KGP" warning of the Flutter tooling.
+
+What your app needs:
+
+| Host app setup | Minimum Flutter |
+|---|---|
+| AGP 8.x | 3.38 |
+| AGP 9 with `android.builtInKotlin=false` | 3.44 |
+| AGP 9 with `android.builtInKotlin=true` | 3.47 |
+
+The Android module targets Java and Kotlin 17, so your app has to compile against 17 as well:
+
+```groovy
+android {
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+```
+
+Keep `android.newDsl=false` in `android/gradle.properties` for now. The Flutter Gradle plugin does
+not support the AGP 9 DSL yet, and the build fails when the new DSL is enabled, regardless of this
+plugin. The example app under [example/android](./example/android) shows a working AGP 9 setup.
+
 ## IOS
 
 #### 1. Create Share Extension
