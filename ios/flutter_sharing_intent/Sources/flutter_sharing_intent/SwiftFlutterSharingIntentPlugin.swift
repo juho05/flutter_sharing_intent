@@ -2,6 +2,12 @@ import Flutter
 import Photos
 import UIKit
 
+// Exposed to Objective-C as `FlutterSharingIntentPlugin` so the generated
+// plugin registrant (which looks up the `pluginClass` from pubspec.yaml)
+// resolves it. Swift Package Manager targets cannot mix Swift and
+// Objective-C, so the former FlutterSharingIntentPlugin.h/.m forwarding
+// shim was replaced by this @objc name.
+@objc(FlutterSharingIntentPlugin)
 public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, FlutterPlugin, FlutterSceneLifeCycleDelegate {
     static let kMessagesChannel = "\(kAppChannel)/messages"
     static let kEventsChannelMedia = "\(kAppChannel)/events-sharing";

@@ -206,7 +206,22 @@ Make sure the deployment target for Runner.app and the share extension is the sa
 ```
 
 
-#### 3. Add the following to your [ios/Podfile](./example/ios/Podfile):
+#### 3. Give the Share Extension access to the plugin
+
+The `Runner` target picks the plugin up automatically. The Share Extension is a
+separate target, so it has to be told about the plugin explicitly. Follow the
+section that matches how your app resolves iOS dependencies.
+
+**Swift Package Manager** (default on Flutter 3.44+)
+
+In Xcode, select the `Share Extension` target, open `General ->
+Frameworks and Libraries`, press `+` and add the `flutter-sharing-intent`
+library. Nothing needs to be added to the Podfile.
+
+**CocoaPods**
+
+Add the following to your [ios/Podfile](./example/ios/Podfile):
+
 ```ruby
 ...
 target 'Runner' do

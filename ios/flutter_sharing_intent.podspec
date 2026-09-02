@@ -13,14 +13,14 @@ Pod::Spec.new do |s|
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'techind' => 'techind@gmail.com' }
   s.source           = { :path => '.' }
-  s.source_files = 'Classes/**/*'
+  s.source_files = 'flutter_sharing_intent/Sources/flutter_sharing_intent/**/*.swift'
   s.dependency 'Flutter'
-  s.ios.deployment_target = '12.0'
+  s.ios.deployment_target = '15.0'
 
   # Xcode 16 explicit module scanner pre-scans all dependencies before build
-  # phases run. The auto-generated flutter_sharing_intent-Swift.h contains
-  # `@import Flutter` under #if __has_feature(objc_modules), which triggers
-  # the scanner to look for Flutter.framework. Flutter's FRAMEWORK_SEARCH_PATHS
+  # phases run. The generated plugin registrant pulls in this pod's Swift module,
+  # whose compatibility header contains `@import Flutter`, which triggers the
+  # scanner to look for Flutter.framework. Flutter's FRAMEWORK_SEARCH_PATHS
   # are SDK-conditional (set by flutter_additional_ios_build_settings), but the
   # scanner ignores sdk-conditionals, so Flutter is never found.
   # Disabling CLANG_ENABLE_EXPLICIT_MODULES on both the pod target and consumer
@@ -38,8 +38,8 @@ Pod::Spec.new do |s|
   }
 
   # Add resource bundle for Apple manifest policy
-  s.resource_bundle = {
-    'MySDKPrivacy' => ['Resources/PrivacyInfo.xcprivacy']
+  s.resource_bundles = {
+    'flutter_sharing_intent_privacy' => ['flutter_sharing_intent/Sources/flutter_sharing_intent/PrivacyInfo.xcprivacy']
   }
   s.swift_version = '5.0'
 end

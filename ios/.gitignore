@@ -56,3 +56,7 @@ Flutter/flutter_assets/
 Flutter/flutter_export_environment.sh
 ServiceDefinitions.json
 Runner/GeneratedPluginRegistrant.*
+# Swift Package Manager
+.swiftpm/
+.build/
+Package.resolved
