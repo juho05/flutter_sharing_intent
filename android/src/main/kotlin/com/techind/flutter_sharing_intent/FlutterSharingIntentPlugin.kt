@@ -329,7 +329,8 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
     if (type != MediaType.VIDEO) return null // get video thumbnail only
 
     val videoFile = File(path)
-    val targetFile = File(applicationContext.cacheDir, "${videoFile.name}.png")
+    val targetDir = if (MyFileDirectory.isInShareInbox(applicationContext, videoFile)) videoFile.parentFile else applicationContext.cacheDir
+    val targetFile = File(targetDir, "${videoFile.name}.png")
     val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       try {
         ThumbnailUtils.createVideoThumbnail(videoFile, Size(512, 384), null)

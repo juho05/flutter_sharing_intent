@@ -11,6 +11,7 @@ import android.provider.MediaStore
 import android.util.Log
 import android.webkit.MimeTypeMap
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.*
 import java.util.regex.Pattern
@@ -25,6 +26,20 @@ import java.util.regex.Pattern
 object MyFileDirectory {
 
     private val FILE_NAME = Pattern.compile("^[^/\\\\:*?\"<>|]+$")
+
+    const val SHARE_INBOX_DIRECTORY = "ShareInbox"
+
+    private fun shareInbox(context: Context): File {
+        return File(context.cacheDir, SHARE_INBOX_DIRECTORY)
+    }
+
+    fun isInShareInbox(context: Context, file: File): Boolean {
+        return try {
+            file.canonicalFile.parentFile?.parentFile == shareInbox(context).canonicalFile
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     /**
      * Get a file path from a Uri. This will get the the path for Storage Access
@@ -42,16 +57,22 @@ object MyFileDirectory {
             // ExternalStorageProvider
             if (isExternalStorageDocument(uri)) {
                 val docId = DocumentsContract.getDocumentId(uri)
-                val split = docId.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-                val type = split[0]
+                val type = docId.substringBefore(':')
 
                 if ("primary".equals(type, ignoreCase = true)) {
-                    @Suppress("DEPRECATION")
-                    val extDir = Environment.getExternalStorageDirectory()
-                    return extDir.toString() + "/" + split[1]
-                } else {
-                    return getDataColumn(context, uri, null, null)
+                    try {
+                        @Suppress("DEPRECATION")
+                        val extDir = Environment.getExternalStorageDirectory().canonicalFile
+                        val file = File(extDir, docId.substringAfter(':')).canonicalFile
+                        // Scoped storage denies raw path access to files owned by other apps.
+                        if (file.path.startsWith(extDir.path + File.separator) && isReadable(file)) {
+                            return file.path
+                        }
+                    } catch (e: Exception) {
+                        Log.w("FileDirectory", "Could not resolve $docId", e)
+                    }
                 }
+                return getDataColumn(context, uri, null, null)
             } else if (isDownloadsDocument(uri)) {
                 return try {
                     val id = DocumentsContract.getDocumentId(uri)
@@ -105,7 +126,7 @@ object MyFileDirectory {
             var cursor: Cursor? = null
             val column = "_display_name"
             val projection = arrayOf(column)
-            var targetFile: File? = null
+            var targetName: String? = null
             try {
                 cursor = context.contentResolver.query(uri, projection, selection, selectionArgs, null)
                 if (cursor != null && cursor.moveToFirst()) {
@@ -118,7 +139,7 @@ object MyFileDirectory {
                         val safeName = File(fileName).name
                         if (safeName.isNotEmpty() && !safeName.startsWith("/")
                                 && !safeName.contains("..") && FILE_NAME.matcher(safeName).matches()) {
-                            targetFile = File(context.cacheDir, safeName)
+                            targetName = safeName
                         }
                     }
                 }
@@ -126,7 +147,7 @@ object MyFileDirectory {
                 cursor?.close()
             }
 
-            if (targetFile == null) {
+            if (targetName == null) {
                 val mimeType = context.contentResolver.getType(uri)
                 val prefix = with(mimeType ?: "") {
                     when {
@@ -136,15 +157,24 @@ object MyFileDirectory {
                     }
                 }
                 val type = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType) ?: "bin"
-                targetFile = File(context.cacheDir, "${prefix}_${Date().time}.$type")
+                targetName = "${prefix}_${Date().time}.$type"
             }
 
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(targetFile).use { fileOut ->
-                    input.copyTo(fileOut)
+            val shareDir = File(shareInbox(context), UUID.randomUUID().toString())
+            return try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    shareDir.mkdirs()
+                    val targetFile = File(shareDir, targetName)
+                    FileOutputStream(targetFile).use { fileOut ->
+                        input.copyTo(fileOut)
+                    }
+                    targetFile.path
                 }
+            } catch (e: Exception) {
+                Log.w("FileDirectory", "Could not copy $uri", e)
+                shareDir.deleteRecursively()
+                null
             }
-            return targetFile.path
         }
 
         var cursor: Cursor? = null
@@ -163,6 +193,17 @@ object MyFileDirectory {
         return null
     }
 
+
+    private fun isReadable(file: File): Boolean {
+        if (!file.isFile || !file.canRead()) return false
+        // canRead() can report true for files scoped storage still blocks.
+        return try {
+            FileInputStream(file).close()
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     /**
      * @param uri The Uri to check.
