@@ -65,6 +65,15 @@ class MethodChannelFlutterSharingIntent extends FlutterSharingIntentPlatform {
   }
 
   @override
+  Future<void> cleanUp(List<SharedFile> files) async {
+    final paths = [
+      for (final f in files) ...[f.value, f.thumbnail],
+    ].whereType<String>().toList();
+    if (paths.isEmpty) return;
+    await methodChannel.invokeMethod('cleanUp', paths);
+  }
+
+  @override
   Future<String> getDebugLogs() async {
     final logs = await methodChannel.invokeMethod<String>('getDebugLogs');
     return logs ?? '';

@@ -7,7 +7,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.DocumentsContract
-import android.provider.MediaStore
 import android.util.Log
 import android.webkit.MimeTypeMap
 import java.io.File
@@ -38,6 +37,31 @@ object MyFileDirectory {
             file.canonicalFile.parentFile?.parentFile == shareInbox(context).canonicalFile
         } catch (e: Exception) {
             false
+        }
+    }
+
+    /** Deletes the share directories of [paths], ignoring paths outside the inbox. */
+    fun cleanUp(context: Context, paths: List<String>) {
+        val dirs = paths.map { File(it) }
+            .filter { isInShareInbox(context, it) }
+            .mapNotNull { it.canonicalFile.parentFile }
+            .toSet()
+        for (dir in dirs) {
+            if (!dir.deleteRecursively()) Log.w("FileDirectory", "Failed to delete $dir")
+        }
+    }
+
+    /**
+     * Deletes share directories older than [maxAgeMs]. Only old ones, a share
+     * received at startup may still be copied into the inbox meanwhile.
+     */
+    fun deleteStaleShares(context: Context, maxAgeMs: Long) {
+        val cutoff = System.currentTimeMillis() - maxAgeMs
+        val dirs = shareInbox(context).listFiles() ?: return
+        for (dir in dirs) {
+            if (dir.lastModified() < cutoff && !dir.deleteRecursively()) {
+                Log.w("FileDirectory", "Failed to delete stale share $dir")
+            }
         }
     }
 
@@ -80,26 +104,13 @@ object MyFileDirectory {
                         Uri.parse("content://downloads/public_downloads"), java.lang.Long.valueOf(id))
 
                     getDataColumn(context, contentUri, null, null)
+                        ?: getDataColumn(context, uri, null, null)
                 } catch (exception: Exception) {
                     getDataColumn(context, uri, null, null)
                 }
             } else if (isMediaDocument(uri)) {
-                val docId = DocumentsContract.getDocumentId(uri)
-                val split = docId.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-                val type = split[0]
-
-                var contentUri: Uri? = null
-                when (type) {
-                    "image" -> contentUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-                    "video" -> contentUri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                    "audio" -> contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-                }
-
-                if (contentUri == null) return null
-
-                val selection = "_id=?"
-                val selectionArgs = arrayOf(split[1])
-                return getDataColumn(context, contentUri, selection, selectionArgs)
+                // The document uri carries the read grant, the MediaStore collections don't.
+                return getDataColumn(context, uri, null, null)
             }// MediaProvider
             // DownloadsProvider
         } else if ("content".equals(uri.scheme, ignoreCase = true)) {

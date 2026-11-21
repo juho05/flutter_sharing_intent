@@ -25,6 +25,9 @@ class MockFlutterSharingIntentPlatform
   Stream<List<SharedFile>> getMediaStream() => Stream.value([]);
 
   @override
+  Future<void> cleanUp(List<SharedFile> files) => Future.value();
+
+  @override
   Future<String> getDebugLogs() => Future.value('');
 
   @override

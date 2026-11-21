@@ -13,6 +13,8 @@ public let kUserDefaultsKey = "SharingKey"
 public let kUserDefaultsMessageKey = "SharingMessageKey"
 public let kAppGroupIdKey = "AppGroupId"
 public let kAppChannel = "flutter_sharing_intent"
+// Each share is copied into ShareInbox/<share id>/ of the app group, so the plugin can delete it as a whole.
+public let kShareInboxDirectory = "ShareInbox"
 
 // extension UIViewController {
 //     func showToast(_ message: String, duration: Double = 2.0) {
@@ -64,7 +66,9 @@ open class FSIShareViewController: SLComposeServiceViewController {
     // MARK: - Config
     private(set) var hostAppBundleIdentifier: String = ""
     private(set) var appGroupId: String = ""
-    
+
+    private let shareId = UUID().uuidString
+
     // Results
     private var sharedMedia: [SharingFile] = []
     
@@ -264,7 +268,7 @@ open class FSIShareViewController: SLComposeServiceViewController {
         // data can be URL, UIImage, or Data
         if let url = data as? URL {
             let filename = getFileName(from: url, type: .image)
-            if let dst = containerURL()?.appendingPathComponent(filename) {
+            if let dst = shareURL()?.appendingPathComponent(filename) {
                 if copyFile(at: url, to: dst) {
                     sharedMedia.append(SharingFile(value: dst.absoluteString, mimeType: url.mimeType(), thumbnail: nil, duration: nil, type: .image))
                 }
@@ -284,7 +288,7 @@ open class FSIShareViewController: SLComposeServiceViewController {
     private func handleVideoItem(data: NSSecureCoding?, index: Int, total: Int) {
         if let url = data as? URL {
             let filename = getFileName(from: url, type: .video)
-            if let dst = containerURL()?.appendingPathComponent(filename) {
+            if let dst = shareURL()?.appendingPathComponent(filename) {
                 if copyFile(at: url, to: dst) {
                     if let m = getSharedMediaFile(forVideo: dst) {
                         sharedMedia.append(m)
@@ -298,7 +302,7 @@ open class FSIShareViewController: SLComposeServiceViewController {
     private func handleFileItem(data: NSSecureCoding?, index: Int, total: Int) {
         if let url = data as? URL {
             let filename = getFileName(from: url, type: .file)
-            if let dst = containerURL()?.appendingPathComponent(filename) {
+            if let dst = shareURL()?.appendingPathComponent(filename) {
                 if copyFile(at: url, to: dst) {
                     sharedMedia.append(SharingFile(value: dst.absoluteString, mimeType: url.mimeType(), thumbnail: nil, duration: nil, type: .file))
                 }
@@ -306,7 +310,7 @@ open class FSIShareViewController: SLComposeServiceViewController {
         }
         else if let raw = data as? Data {
             let filename = "File_\(UUID().uuidString)"
-            if let dst = containerURL()?.appendingPathComponent(filename) {
+            if let dst = shareURL()?.appendingPathComponent(filename) {
                 do {
                     try raw.write(to: dst)
                     sharedMedia.append(SharingFile(value: dst.absoluteString, mimeType: "application/octet-stream", thumbnail: nil, duration: nil, type: .file))
@@ -319,7 +323,7 @@ open class FSIShareViewController: SLComposeServiceViewController {
     
     // MARK: - Helpers: write temp image
     private func writeTempImage(_ image: UIImage) -> SharingFile? {
-        guard let container = containerURL() else { return nil }
+        guard let container = shareURL() else { return nil }
         let tempName = "TempImage_\(UUID().uuidString).png"
         let dst = container.appendingPathComponent(tempName)
         do {
@@ -486,13 +490,32 @@ open class FSIShareViewController: SLComposeServiceViewController {
     }
     
     private func getThumbnailPath(for url: URL) -> URL {
-        guard let container = containerURL() else { fatalError("App group not configured or missing") }
+        guard let container = shareURL() else { fatalError("App group not configured or missing") }
         let fileName = Data(url.lastPathComponent.utf8).base64EncodedString().replacingOccurrences(of: "=", with: "")
         return container.appendingPathComponent("\(fileName).jpg")
     }
-    
+
     private func containerURL() -> URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupId)
+    }
+
+    // Created on demand. Excluded from backups since everything in it is a temporary copy.
+    private func shareURL() -> URL? {
+        guard var dir = containerURL()?
+            .appendingPathComponent(kShareInboxDirectory, isDirectory: true)
+            .appendingPathComponent(shareId, isDirectory: true) else { return nil }
+        if FileManager.default.fileExists(atPath: dir.path) { return dir }
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try dir.setResourceValues(values)
+        } catch {
+            log("shareURL error: \(error)")
+            // Attachments load concurrently, another one may have created it meanwhile.
+            return FileManager.default.fileExists(atPath: dir.path) ? dir : nil
+        }
+        return dir
     }
     
     private func completeAndExit() {

@@ -8,6 +8,8 @@ import android.media.MediaMetadataRetriever
 import android.media.ThumbnailUtils
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import android.util.Size
@@ -27,8 +29,13 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.net.URLConnection
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val EVENTS_CHANNEL_MEDIA = "flutter_sharing_intent/events-sharing"
+private const val STALE_SHARE_AGE_MS = 24L * 60 * 60 * 1000
+
+// Process wide, the plugin is attached once per engine.
+private val staleSharesDeleted = AtomicBoolean(false)
 
 /**
  **  Author - Bhagat Singh
@@ -73,6 +80,10 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
   override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     applicationContext = flutterPluginBinding.applicationContext
     setupCallbackChannels(flutterPluginBinding.binaryMessenger)
+    if (staleSharesDeleted.compareAndSet(false, true)) {
+      val context = applicationContext
+      Thread { MyFileDirectory.deleteStaleShares(context, STALE_SHARE_AGE_MS) }.start()
+    }
   }
 
   override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
@@ -88,6 +99,14 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
         initialSharing = null
         latestSharing = null
         result.success(null)
+      }
+      "cleanUp" -> {
+        val paths = call.arguments<List<String>>() ?: emptyList()
+        val context = applicationContext
+        Thread {
+          MyFileDirectory.cleanUp(context, paths)
+          Handler(Looper.getMainLooper()).post { result.success(null) }
+        }.start()
       }
       "getDebugLogs" -> {
         result.success(FSILogger.readAll(applicationContext))

@@ -16,8 +16,8 @@ class FlutterSharingIntent {
   }
 
   /// Returns a [Future], which completes to one of the following:
-  /// NOTE. The returned media on iOS (iOS ONLY) is already copied to a temp folder.
-  /// So, you need to delete the file after you finish using it
+  /// Shared files may be copies made by the plugin, call [cleanUp] once they
+  /// are consumed.
   Future<List<SharedFile>> getInitialSharing() {
     return FlutterSharingIntentPlatform.instance.getInitialSharing();
   }
@@ -42,6 +42,19 @@ class FlutterSharingIntent {
   Stream<List<SharedFile>> getMediaStream() {
     _streamMedia ??= FlutterSharingIntentPlatform.instance.getMediaStream();
     return _streamMedia!;
+  }
+
+  /// Deletes the copies the plugin made for [files], call it once they are
+  /// consumed. Paths that aren't the plugin's own copies are left alone, on
+  /// Android they can be the user's original files.
+  ///
+  /// Pass all files of a share at once. On iOS the copies of one share are
+  /// deleted together, even the ones not passed.
+  ///
+  /// Copies of shares that were never cleaned up are deleted automatically
+  /// after a day.
+  Future<void> cleanUp(List<SharedFile> files) {
+    return FlutterSharingIntentPlatform.instance.cleanUp(files);
   }
 
   /// Returns the accumulated native-side debug log (attachment processing,

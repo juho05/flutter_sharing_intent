@@ -36,6 +36,63 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
         // addSceneDelegate is part of FlutterPluginRegistrar (requires Flutter >=3.3.0 with UIScene support on iOS 13+)
         registrar.addSceneDelegate(instance)
         // registrar.addMethodCallDelegate(instance, channel: channel)
+
+        _ = staleSharesCleanup
+    }
+
+    static let kStaleShareAge: TimeInterval = 24 * 60 * 60
+
+    // Lazy static, so the cleanup runs once per process even with several engines.
+    private static let staleSharesCleanup: Void = {
+        DispatchQueue.global(qos: .utility).async { SwiftFlutterSharingIntentPlugin.deleteStaleShares() }
+    }()
+
+    private static func shareInboxURL() -> URL? {
+        let groupId = (Bundle.main.object(forInfoDictionaryKey: kAppGroupIdKey) as? String)
+            ?? "group.\(Bundle.main.bundleIdentifier ?? "")"
+        return FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: groupId)?
+            .appendingPathComponent(kShareInboxDirectory, isDirectory: true)
+    }
+
+    /// Deletes the share directories of `paths`, ignoring paths outside the inbox.
+    private static func cleanUp(paths: [String]) {
+        guard let inbox = shareInboxURL()?.resolvingSymlinksInPath().standardizedFileURL else { return }
+        var dirs = Set<URL>()
+        for p in paths {
+            // The file name may be percent encoded and not exist, only the share directory resolves reliably.
+            let dir = URL(fileURLWithPath: p.replacingOccurrences(of: "file://", with: ""))
+                .standardizedFileURL.deletingLastPathComponent()
+                .resolvingSymlinksInPath().standardizedFileURL
+            if dir.deletingLastPathComponent().path == inbox.path {
+                dirs.insert(dir)
+            }
+        }
+        for dir in dirs {
+            do {
+                try FileManager.default.removeItem(at: dir)
+            } catch {
+                FSILogger.shared.log("cleanUp: failed to delete \(dir.path): \(error)", tag: "Plugin")
+            }
+        }
+    }
+
+    /// Only old shares are deleted, a share may be written to the inbox meanwhile.
+    private static func deleteStaleShares() {
+        guard let inbox = shareInboxURL(),
+              let entries = try? FileManager.default.contentsOfDirectory(
+                at: inbox, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        let cutoff = Date().addingTimeInterval(-kStaleShareAge)
+        for entry in entries {
+            let modified = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            guard modified < cutoff else { continue }
+            do {
+                try FileManager.default.removeItem(at: entry)
+            } catch {
+                FSILogger.shared.log("deleteStaleShares: failed to delete \(entry.path): \(error)", tag: "Plugin")
+            }
+        }
     }
 
     //  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -59,6 +116,13 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
 
         case "getPlatformVersion" :
             result("iOS " + UIDevice.current.systemVersion);
+
+        case "cleanUp":
+            let paths = call.arguments as? [String] ?? []
+            DispatchQueue.global(qos: .utility).async {
+                Self.cleanUp(paths: paths)
+                DispatchQueue.main.async { result(nil) }
+            }
 
         case "getDebugLogs":
             result(FSILogger.shared.readAll())
